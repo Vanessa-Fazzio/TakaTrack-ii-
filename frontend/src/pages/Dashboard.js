@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Truck, Recycle, MapPin, TrendingUp, Users, Shield } from 'lucide-react';
-import axios from 'axios';
+import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [stats, setStats] = useState({ totalBins: 0, collectedToday: 0, recycledWeight: 0, pendingCollections: 0, activeDrivers: 0 });
-  const [notifications, setNotifications] = useState([]);
+  const [stats, setStats] = useState({ 
+    totalBins: 0, 
+    collectedToday: 0, 
+    recycledWeight: 0, 
+    pendingCollections: 0, 
+    activeDrivers: 0,
+    completed: 0,
+    pending: 0,
+    inProgress: 0
+  });
+  const [notifications, setNotifications] = useState([
+    { id: 1, title: 'Welcome to TakaTrack', message: 'Your dashboard is ready!', type: 'info', time: 'Just now' }
+  ]);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -17,14 +29,39 @@ const Dashboard = () => {
 
   const loadData = async () => {
     try {
-      const statsResponse = await axios.get('http://localhost:5003/api/dashboard/stats');
-      const notificationsResponse = await axios.get('http://localhost:5003/api/notifications');
-      const driversResponse = await axios.get('http://localhost:5003/api/drivers');
+      setError(null);
+      const [statsResponse, notificationsResponse, driversResponse] = await Promise.all([
+        api.get('/api/dashboard/stats'),
+        api.get('/api/notifications'),
+        api.get('/api/drivers')
+      ]);
       setStats(statsResponse.data);
-      setNotifications(notificationsResponse.data);
+      setNotifications(notificationsResponse.data.length > 0 ? notificationsResponse.data : [
+        { id: 1, title: 'Welcome to TakaTrack', message: 'Your dashboard is ready!', type: 'info', time: 'Just now' }
+      ]);
       setDrivers(driversResponse.data);
     } catch (error) {
       console.error('Error loading data:', error);
+      setError('Failed to load dashboard data. Using demo data.');
+      // Set demo data if API calls fail
+      setStats({ 
+        totalBins: 15, 
+        collectedToday: 8, 
+        recycledWeight: 45.2, 
+        pendingCollections: 3, 
+        activeDrivers: 5,
+        completed: 8,
+        pending: 3,
+        inProgress: 2
+      });
+      setNotifications([
+        { id: 1, title: 'Demo Mode', message: 'Dashboard running in demo mode', type: 'info', time: 'Just now' },
+        { id: 2, title: 'Collection Completed', message: 'Westlands route completed', type: 'success', time: '2 hours ago' }
+      ]);
+      setDrivers([
+        { id: 1, name: 'John Kamau', phone: '+254701234567', email: 'john@demo.com', activeCollections: 2, totalCollected: 125.5, status: 'active' },
+        { id: 2, name: 'Mary Wanjiku', phone: '+254712345678', email: 'mary@demo.com', activeCollections: 1, totalCollected: 89.2, status: 'active' }
+      ]);
     }
     setLoading(false);
   };
@@ -291,11 +328,30 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="pb-20 bg-gray-50 min-h-screen">
+      {error && (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <Bell className="h-5 w-5" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-primary text-white p-6 rounded-b-3xl">
         <div className="flex justify-between items-center mb-4">
           <div>

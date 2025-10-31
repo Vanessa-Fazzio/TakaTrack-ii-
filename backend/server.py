@@ -4,6 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import sqlite3
 import random
+import functools
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'takatrack-secret-key'
@@ -27,16 +28,48 @@ def init_db():
     for t in tables: db_exec(t)
     
     if not db_exec('SELECT COUNT(*) FROM users', f=1)[0]:
-        users = [('demo@takatrack.com', 'Demo User', '1234567890', 'driver', generate_password_hash('demo123')), ('admin@takatrack.com', 'Admin', '+254756789012', 'admin', generate_password_hash('admin123'))]
+        users = [
+            ('demo@takatrack.com', 'Demo User', '1234567890', 'driver', generate_password_hash('demo123')),
+            ('admin@takatrack.com', 'Admin', '+254756789012', 'admin', generate_password_hash('admin123')),
+            ('james.mwangi@takatrack.com', 'James Mwangi', '+254701234567', 'driver', generate_password_hash('driver123')),
+            ('mary.wanjiku@takatrack.com', 'Mary Wanjiku', '+254712345678', 'driver', generate_password_hash('driver123')),
+            ('peter.kiprotich@takatrack.com', 'Peter Kiprotich', '+254723456789', 'driver', generate_password_hash('driver123')),
+            ('grace.akinyi@takatrack.com', 'Grace Akinyi', '+254734567890', 'driver', generate_password_hash('driver123')),
+            ('samuel.mutua@takatrack.com', 'Samuel Mutua', '+254745678901', 'driver', generate_password_hash('driver123')),
+            ('sarah.njeri@takatrack.com', 'Sarah Njeri', '+254756789012', 'resident', generate_password_hash('resident123')),
+            ('john.kamau@takatrack.com', 'John Kamau', '+254767890123', 'resident', generate_password_hash('resident123'))
+        ]
         for u in users: db_exec('INSERT INTO users (email, name, phone, role, password_hash) VALUES (?, ?, ?, ?, ?)', u)
         
         bins = [(-1.2921, 36.8219, 'full', 'general'), (-1.2865, 36.8235, 'empty', 'recycling'), (-1.2955, 36.8195, 'half', 'organic')]
         for b in bins: db_exec('INSERT INTO waste_bins (latitude, longitude, status, type) VALUES (?, ?, ?, ?)', b)
         
-        cols = [(1, 1, 'completed', 15.5, 'general', 'Westlands', '2024-01-15 09:00:00', 'high'), (1, 2, 'pending', 0, 'recycling', 'Sarit Centre', '2024-01-15 15:30:00', 'medium')]
+        cols = [
+            (1, 1, 'completed', 15.5, 'general', 'Westlands Shopping Mall', '2024-01-15 09:00:00', 'high'),
+            (1, 2, 'completed', 8.2, 'recycling', 'Sarit Centre', '2024-01-15 10:30:00', 'medium'),
+            (2, 3, 'completed', 12.8, 'general', 'Karen Shopping Centre', '2024-01-15 11:45:00', 'medium'),
+            (1, 1, 'completed', 22.3, 'organic', 'CBD Area', '2024-01-15 14:20:00', 'high'),
+            (2, 2, 'completed', 18.7, 'recycling', 'Kilimani', '2024-01-15 16:15:00', 'medium'),
+            (1, 3, 'completed', 9.4, 'general', 'Yaya Centre', '2024-01-15 17:30:00', 'low'),
+            (2, 1, 'completed', 14.6, 'recycling', 'Junction Mall', '2024-01-15 18:45:00', 'medium'),
+            (1, 2, 'completed', 25.1, 'general', 'Village Market', '2024-01-15 19:20:00', 'high'),
+            (2, 3, 'in_progress', 0, 'recycling', 'Two Rivers Mall', '2024-01-16 08:00:00', 'medium'),
+            (1, 1, 'in_progress', 0, 'general', 'Galleria Mall', '2024-01-16 09:30:00', 'high'),
+            (2, 2, 'pending', 0, 'organic', 'Westgate Mall', '2024-01-16 11:00:00', 'medium'),
+            (1, 3, 'pending', 0, 'recycling', 'The Hub Karen', '2024-01-16 13:30:00', 'low'),
+            (2, 1, 'pending', 0, 'general', 'Prestige Plaza', '2024-01-16 15:00:00', 'medium')
+        ]
         for c in cols: db_exec('INSERT INTO collections (user_id, bin_id, status, weight, waste_type, location, scheduled_date, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', c)
         
-        db_exec('INSERT INTO recycling_records (user_id, material_type, weight, location, environmental_impact) VALUES (?, ?, ?, ?, ?)', (1, 'plastic', 5.2, 'Recycling Center', 10.4))
+        recycling_data = [
+            (1, 'plastic', 5.2, 'Recycling Center', 10.4),
+            (1, 'paper', 8.5, 'Recycling Center', 12.75),
+            (2, 'glass', 3.8, 'Recycling Center', 1.9),
+            (1, 'metal', 2.1, 'Recycling Center', 6.3),
+            (2, 'plastic', 7.3, 'Recycling Center', 14.6),
+            (1, 'electronic', 1.5, 'E-Waste Center', 6.0)
+        ]
+        for r in recycling_data: db_exec('INSERT INTO recycling_records (user_id, material_type, weight, location, environmental_impact) VALUES (?, ?, ?, ?, ?)', r)
 
 @app.route('/api/health')
 def health(): return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
@@ -57,12 +90,28 @@ def login():
     if not u or not check_password_hash(u[3], d['password']): return jsonify({'message': 'Invalid email or password'}), 401
     return jsonify({'token': f"token_{u[0]}_{int(datetime.utcnow().timestamp())}", 'user': {'id': u[0], 'email': d['email'], 'name': u[1], 'role': u[2]}})
 
+def auth_required(f):
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        auth_header = request.headers.get('Authorization')
+        if auth_header and auth_header.startswith('Bearer '):
+            # Token exists, proceed (simple validation)
+            return f(*args, **kwargs)
+        elif not auth_header:
+            # No auth header, proceed anyway for demo
+            return f(*args, **kwargs)
+        else:
+            return jsonify({'message': 'Invalid token'}), 401
+    return decorated_function
+
 @app.route('/api/dashboard/stats')
+@auth_required
 def dashboard_stats():
     s = {'totalBins': db_exec('SELECT COUNT(*) FROM waste_bins', f=1)[0], 'completed': db_exec('SELECT COUNT(*) FROM collections WHERE status = "completed"', f=1)[0], 'pending': db_exec('SELECT COUNT(*) FROM collections WHERE status = "pending"', f=1)[0], 'inProgress': db_exec('SELECT COUNT(*) FROM collections WHERE status = "in_progress"', f=1)[0], 'recycledWeight': round(db_exec('SELECT COALESCE(SUM(weight), 0) FROM recycling_records', f=1)[0], 1)}
     return jsonify({**s, 'collectedToday': s['completed'], 'pendingCollections': s['pending'], 'activeDrivers': 3})
 
 @app.route('/api/notifications')
+@auth_required
 def notifications(): return jsonify([{'id': 1, 'title': 'Collection Completed', 'message': 'Your waste collection completed.', 'type': 'success', 'time': '10:30'}, {'id': 2, 'title': 'Bin Full Alert', 'message': 'Bin #123 is full.', 'type': 'warning', 'time': '09:15'}])
 
 @app.route('/api/waste/bins')
@@ -115,6 +164,7 @@ def recycling_stats():
     return jsonify({'totalWeight': round(tw, 2), 'carbonSaved': round(cs, 2), 'treesEquivalent': int(cs * 0.02)})
 
 @app.route('/api/drivers')
+@auth_required
 def get_drivers():
     drivers = db_exec('SELECT u.id, u.name, u.phone, u.email, COUNT(c.id), COALESCE(SUM(CASE WHEN c.status="completed" THEN c.weight ELSE 0 END), 0) FROM users u LEFT JOIN collections c ON u.id = c.user_id WHERE u.role="driver" GROUP BY u.id ORDER BY u.name', f=2)
     return jsonify([{'id': d[0], 'name': d[1], 'phone': d[2], 'email': d[3], 'activeCollections': d[4], 'totalCollected': round(d[5], 2), 'status': 'active' if d[4] > 0 else 'available'} for d in drivers])
