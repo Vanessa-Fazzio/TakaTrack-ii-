@@ -1,26 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
 import { Recycle } from 'lucide-react';
 
 const Login = () => {
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({ 
+    email: 'demo@takatrack.com', 
+    password: 'demo123' 
+  });
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user && user.id) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     
-    const result = await login(formData.email, formData.password);
-    
-    if (result.success) {
-      toast.success('Login successful!');
-      navigate('/');
-    } else {
-      toast.error(result.error);
+    try {
+      const result = await login(formData.email, formData.password);
+      
+      if (result.success) {
+        toast.success('Login successful!');
+        navigate('/', { replace: true });
+      } else {
+        toast.error(result.error || 'Login failed');
+      }
+    } catch (error) {
+      toast.error('Login failed');
     }
     
     setLoading(false);

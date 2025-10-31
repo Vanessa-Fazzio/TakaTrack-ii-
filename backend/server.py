@@ -27,7 +27,14 @@ def init_db():
     
     for t in tables: db_exec(t)
     
-    if not db_exec('SELECT COUNT(*) FROM users', f=1)[0]:
+    user_count = db_exec('SELECT COUNT(*) FROM users', f=1)[0]
+    if user_count < 9:
+        # Clear existing data to avoid duplicates
+        db_exec('DELETE FROM users')
+        db_exec('DELETE FROM waste_bins')
+        db_exec('DELETE FROM collections')
+        db_exec('DELETE FROM recycling_records')
+        
         users = [
             ('demo@takatrack.com', 'Demo User', '1234567890', 'driver', generate_password_hash('demo123')),
             ('admin@takatrack.com', 'Admin', '+254756789012', 'admin', generate_password_hash('admin123')),
@@ -79,8 +86,34 @@ def register():
     d = request.get_json()
     if not d or not all(k in d for k in ['email', 'password', 'name']): return jsonify({'message': 'Email, password, and name are required'}), 400
     if db_exec('SELECT id FROM users WHERE email = ?', [d['email']], 1): return jsonify({'message': 'Email already registered'}), 400
+    
+    # Insert new user
     db_exec('INSERT INTO users (email, name, phone, role, password_hash) VALUES (?, ?, ?, ?, ?)', [d['email'], d['name'], d.get('phone', ''), d.get('role', 'resident'), generate_password_hash(d['password'])])
-    return jsonify({'message': 'User registered successfully'}), 201
+    
+    # Get the new user ID
+    user_id = db_exec('SELECT last_insert_rowid()', f=1)[0]
+    
+    # Create sample collections for the new user
+    sample_collections = [
+        (user_id, 1, 'completed', 15.5, 'general', f'{d["name"]}s Home - Westlands', '2024-01-15 08:30:00', 'medium'),
+        (user_id, 2, 'completed', 8.2, 'recycling', f'{d["name"]}s Office - CBD', '2024-01-14 16:45:00', 'medium'),
+        (user_id, 3, 'in_progress', 0, 'organic', f'{d["name"]}s Apartment - Kilimani', '2024-01-16 09:00:00', 'low'),
+        (user_id, 1, 'pending', 0, 'general', f'{d["name"]}s Home - Westlands', '2024-01-17 08:00:00', 'high')
+    ]
+    for c in sample_collections:
+        db_exec('INSERT INTO collections (user_id, bin_id, status, weight, waste_type, location, scheduled_date, priority) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', c)
+    
+    # Create sample recycling records for the new user
+    sample_recycling = [
+        (user_id, 'plastic', 5.2, 'Recycling Center - Westlands', 10.4),
+        (user_id, 'paper', 8.5, 'Recycling Center - CBD', 12.75),
+        (user_id, 'glass', 3.8, 'Recycling Center - Kilimani', 1.9),
+        (user_id, 'electronic', 4.9, 'E-Waste Center', 19.6)
+    ]
+    for r in sample_recycling:
+        db_exec('INSERT INTO recycling_records (user_id, material_type, weight, location, environmental_impact) VALUES (?, ?, ?, ?, ?)', r)
+    
+    return jsonify({'message': 'User registered successfully with sample data'}), 201
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():

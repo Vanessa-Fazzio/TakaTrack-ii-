@@ -19,6 +19,8 @@ const Dashboard = () => {
     { id: 1, title: 'Welcome to TakaTrack', message: 'Your dashboard is ready!', type: 'info', time: 'Just now' }
   ]);
   const [drivers, setDrivers] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [recyclingRecords, setRecyclingRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
   const [error, setError] = useState(null);
@@ -30,16 +32,20 @@ const Dashboard = () => {
   const loadData = async () => {
     try {
       setError(null);
-      const [statsResponse, notificationsResponse, driversResponse] = await Promise.all([
+      const [statsResponse, notificationsResponse, driversResponse, collectionsResponse, recyclingResponse] = await Promise.all([
         api.get('/api/dashboard/stats'),
         api.get('/api/notifications'),
-        api.get('/api/drivers')
+        api.get('/api/drivers'),
+        api.get('/api/waste/collections'),
+        api.get('/api/recycling/records')
       ]);
       setStats(statsResponse.data);
       setNotifications(notificationsResponse.data.length > 0 ? notificationsResponse.data : [
         { id: 1, title: 'Welcome to TakaTrack', message: 'Your dashboard is ready!', type: 'info', time: 'Just now' }
       ]);
       setDrivers(driversResponse.data);
+      setCollections(collectionsResponse.data || []);
+      setRecyclingRecords(recyclingResponse.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       setError('Failed to load dashboard data. Using demo data.');
@@ -49,8 +55,8 @@ const Dashboard = () => {
         collectedToday: 8, 
         recycledWeight: 45.2, 
         pendingCollections: 3, 
-        activeDrivers: 5,
-        completed: 8,
+        activeDrivers: 3,
+        completed: 5,
         pending: 3,
         inProgress: 2
       });
@@ -66,8 +72,47 @@ const Dashboard = () => {
     setLoading(false);
   };
 
+  // Helper functions to get consistent data counts
+  const getMyCollectionsData = () => {
+    const userCollections = collections.filter(c => c.user_id === user?.id) || [];
+    return userCollections.length > 0 ? userCollections : [
+      { id: 1, location: `${user?.name || 'My'} Home - Westlands`, waste_type: 'General Waste', status: 'completed', weight: 15.5, created_at: 'Today 08:30' },
+      { id: 2, location: `${user?.name || 'My'} Office - CBD`, waste_type: 'Recycling', status: 'completed', weight: 8.2, created_at: 'Yesterday 16:45' },
+      { id: 3, location: `${user?.name || 'My'} Apartment - Kilimani`, waste_type: 'Organic Waste', status: 'in_progress', weight: 0, created_at: 'Tomorrow' }
+    ];
+  };
+
+  const getMyRecyclingData = () => {
+    const userRecycling = recyclingRecords.filter(r => r.user_id === user?.id) || [];
+    return userRecycling.length > 0 ? userRecycling : [
+      { id: 1, material: 'Plastic Bottles', weight: 5.2, location: 'Recycling Center - Westlands', environmental_impact: 10.4, createdAt: 'Today' },
+      { id: 2, material: 'Paper & Cardboard', weight: 8.5, location: 'Recycling Center - CBD', environmental_impact: 12.75, createdAt: 'Yesterday' },
+      { id: 3, material: 'Glass Bottles', weight: 3.8, location: 'Recycling Center - Kilimani', environmental_impact: 1.9, createdAt: '2 days ago' },
+      { id: 4, material: 'Electronic Waste', weight: 4.9, location: 'E-Waste Center', environmental_impact: 19.6, createdAt: 'Last week' }
+    ];
+  };
+
+  const getNextPickupData = () => {
+    return [
+      { id: 1, location: `${user?.name || 'My'} Home - Westlands`, type: 'General Waste', date: 'Tomorrow', time: '08:00 AM', status: 'Confirmed' },
+      { id: 2, location: `${user?.name || 'My'} Office - CBD`, type: 'Recycling', date: 'Friday', time: '02:00 PM', status: 'Scheduled' }
+    ];
+  };
+
+  const getEcoPointsData = () => {
+    const recyclingData = getMyRecyclingData();
+    return [
+      { activity: 'Recycled Plastic Bottles', points: '+52', date: 'Today', impact: '10.4kg CO2 saved' },
+      { activity: 'Recycled Paper & Cardboard', points: '+85', date: 'Yesterday', impact: '12.75kg CO2 saved' },
+      { activity: 'Proper Waste Sorting', points: '+15', date: '2 days ago', impact: 'Helped sorting efficiency' }
+    ];
+  };
+
   const getNextPickupDays = () => 3;
-  const openModal = (type) => setActiveModal(type);
+  const openModal = (type) => {
+    console.log('Opening modal:', type);
+    setActiveModal(type);
+  };
   const closeModal = () => setActiveModal(null);
 
   const getModalTitle = () => {
@@ -90,105 +135,154 @@ const Dashboard = () => {
   };
 
   const getModalContent = () => {
-    if (activeModal === 'notifications') {
-      return notifications.length === 0 ? (
-        <p className="text-gray-500 text-center py-4">No notifications</p>
-      ) : (
-        notifications.map((notification, index) => (
-          <div key={index} className="p-3 bg-gray-50 rounded-lg mb-3">
-            <p className="text-sm font-medium">{notification.title}</p>
-            <p className="text-xs text-gray-600">{notification.message}</p>
-            <p className="text-xs text-gray-500">{notification.time}</p>
-          </div>
-        ))
-      );
-    }
-
-    if (activeModal === 'drivers') {
+    console.log('Getting content for modal:', activeModal);
+    
+    // RESIDENT MODALS - Show consistent data
+    if (activeModal === 'myCollections') {
+      const displayCollections = getMyCollectionsData();
+      
       return (
         <div className="space-y-3">
-          {drivers.map((driver) => (
-            <div key={driver.id} className="p-3 bg-gray-50 rounded-lg">
+          {displayCollections.slice(0, 5).map((collection, index) => (
+            <div key={collection.id || index} className="p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
               <div className="flex justify-between items-start mb-2">
                 <div>
-                  <p className="font-medium">{driver.name}</p>
-                  <p className="text-sm text-gray-600">{driver.phone}</p>
+                  <p className="font-medium text-blue-800">{collection.location}</p>
+                  <p className="text-sm text-blue-600">{collection.waste_type}</p>
                 </div>
                 <span className={`text-xs px-2 py-1 rounded-full ${
-                  driver.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                  collection.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  collection.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                  'bg-gray-100 text-gray-800'
                 }`}>
-                  {driver.status}
+                  {collection.status}
                 </span>
               </div>
-              <div className="flex justify-between text-sm text-gray-600">
-                <span>Collections: {driver.activeCollections}</span>
-                <span>Total: {driver.totalCollected}kg</span>
+              <div className="flex justify-between text-sm text-blue-600">
+                <span>Weight: {collection.weight || 0}kg</span>
+                <span>{collection.created_at || collection.scheduled_date}</span>
               </div>
+              <p className="text-xs text-gray-500 mt-1">Driver: John Kamau</p>
             </div>
           ))}
         </div>
       );
     }
 
-    if (activeModal === 'users') {
-      const users = [
-        { name: 'John Kamau', role: 'Driver', status: 'Active' },
-        { name: 'Mary Wanjiku', role: 'Driver', status: 'Active' },
-        { name: 'Peter Mwangi', role: 'Driver', status: 'Idle' },
-        { name: 'Sarah Njeri', role: 'Resident', status: 'Active' }
-      ];
+    if (activeModal === 'recycling') {
       return (
         <div className="space-y-3">
-          {users.map((u, i) => (
-            <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+          <div className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
+            <div className="flex justify-between items-start mb-2">
               <div>
-                <p className="font-medium">{u.name}</p>
-                <p className="text-sm text-gray-600">{u.role}</p>
+                <p className="font-medium text-green-800">Plastic Bottles</p>
+                <p className="text-sm text-green-600">Recycling Center - Westlands</p>
               </div>
-              <span className={`text-sm ${u.status === 'Active' ? 'text-green-600' : 'text-yellow-600'}`}>{u.status}</span>
+              <div className="text-right">
+                <p className="text-sm font-medium text-green-800">5.2kg</p>
+                <p className="text-xs text-green-600">+52 pts</p>
+              </div>
             </div>
-          ))}
+            <div className="flex justify-between text-xs text-gray-600">
+              <span>10.4kg CO2 saved</span>
+              <span>Today</span>
+            </div>
+          </div>
+          <div className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-medium text-green-800">Paper & Cardboard</p>
+                <p className="text-sm text-green-600">Recycling Center - CBD</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-green-800">8.5kg</p>
+                <p className="text-xs text-green-600">+85 pts</p>
+              </div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-600">
+              <span>12.75kg CO2 saved</span>
+              <span>Yesterday</span>
+            </div>
+          </div>
         </div>
       );
     }
 
-    if (activeModal === 'reports') {
-      const reports = [
-        { type: 'error', title: 'Bin Overflow Alert', msg: 'Bin #12 in Westlands is full', time: '2 hours ago' },
-        { type: 'warning', title: 'Route Delay', msg: 'Truck T002 is 30 mins behind schedule', time: '1 hour ago' },
-        { type: 'success', title: 'Collection Complete', msg: 'CBD route completed successfully', time: '3 hours ago' },
-        { type: 'info', title: 'New Registration', msg: '5 new residents registered today', time: '5 hours ago' }
-      ];
+    if (activeModal === 'nextPickup') {
+      const displayPickups = getNextPickupData();
+      
       return (
         <div className="space-y-3">
-          {reports.map((r, i) => (
-            <div key={i} className={`p-3 rounded-lg border-l-4 ${
-              r.type === 'error' ? 'bg-red-50 border-red-500' :
-              r.type === 'warning' ? 'bg-yellow-50 border-yellow-500' :
-              r.type === 'success' ? 'bg-green-50 border-green-500' :
-              'bg-blue-50 border-blue-500'
-            }`}>
-              <p className={`font-medium ${
-                r.type === 'error' ? 'text-red-800' :
-                r.type === 'warning' ? 'text-yellow-800' :
-                r.type === 'success' ? 'text-green-800' :
-                'text-blue-800'
-              }`}>{r.title}</p>
-              <p className={`text-sm ${
-                r.type === 'error' ? 'text-red-600' :
-                r.type === 'warning' ? 'text-yellow-600' :
-                r.type === 'success' ? 'text-green-600' :
-                'text-blue-600'
-              }`}>{r.msg}</p>
-              <p className="text-xs text-gray-500">{r.time}</p>
+          <div className="bg-orange-100 p-3 rounded-lg mb-4">
+            <p className="text-sm font-medium text-orange-800">Next Pickup: Tomorrow at 8:00 AM</p>
+            <p className="text-xs text-orange-600">General waste collection at your home</p>
+          </div>
+          <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-medium text-orange-800">My Home - Westlands</p>
+                <p className="text-sm text-orange-600">General Waste</p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">Confirmed</span>
+            </div>
+            <div className="flex justify-between text-sm text-orange-600">
+              <span>Tomorrow at 08:00 AM</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Driver: John Kamau</p>
+          </div>
+          <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <p className="font-medium text-orange-800">My Office - CBD</p>
+                <p className="text-sm text-orange-600">Recycling</p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-800">Scheduled</span>
+            </div>
+            <div className="flex justify-between text-sm text-orange-600">
+              <span>Friday at 02:00 PM</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">Driver: Mary Wanjiku</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeModal === 'ecoPoints') {
+      const recyclingData = getMyRecyclingData();
+      const totalPoints = Math.round(recyclingData.reduce((sum, r) => sum + (r.environmental_impact * 10), 0));
+      const pointsHistory = getEcoPointsData();
+      
+      return (
+        <div className="space-y-3">
+          <div className="bg-green-100 p-3 rounded-lg mb-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-green-800">Current Level: Eco Warrior</p>
+                <p className="text-xs text-green-600">73 points to next level</p>
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-bold text-green-800">🌱</p>
+              </div>
+            </div>
+          </div>
+          {pointsHistory.map((item, i) => (
+            <div key={i} className="p-3 bg-green-50 rounded-lg">
+              <div className="flex justify-between items-start mb-1">
+                <p className="text-sm font-medium text-green-800">{item.activity}</p>
+                <span className="text-sm font-bold text-green-600">{item.points}</span>
+              </div>
+              <div className="flex justify-between text-xs text-gray-600">
+                <span>{item.impact}</span>
+                <span>{item.date}</span>
+              </div>
             </div>
           ))}
         </div>
       );
     }
 
+    // DRIVER MODALS
     if (activeModal === 'route') {
-      const routeCount = 8;
       const todaysRoute = [
         { id: 1, location: 'Westlands Shopping Mall', time: '08:00', status: 'completed', weight: '15.5kg' },
         { id: 2, location: 'Sarit Centre', time: '09:30', status: 'completed', weight: '8.2kg' },
@@ -223,6 +317,116 @@ const Dashboard = () => {
       );
     }
 
+
+
+
+
+
+
+    // ADMIN MODALS
+
+
+    if (activeModal === 'drivers') {
+      const activeDriversData = [
+        { id: 1, name: 'John Kamau', phone: '+254701234567', collections: 2, total: '125.5kg', status: 'active' },
+        { id: 2, name: 'Mary Wanjiku', phone: '+254712345678', collections: 1, total: '89.2kg', status: 'active' },
+        { id: 3, name: 'Peter Mwangi', phone: '+254723456789', collections: 3, total: '156.8kg', status: 'active' }
+      ];
+      return (
+        <div className="space-y-3">
+          {activeDriversData.map((driver) => (
+            <div key={driver.id} className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <p className="font-medium">{driver.name}</p>
+                  <p className="text-sm text-gray-600">{driver.phone}</p>
+                </div>
+                <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">{driver.status}</span>
+              </div>
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>Collections: {driver.collections}</span>
+                <span>Total: {driver.total}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+
+
+
+
+    if (activeModal === 'notifications') {
+      return notifications.length === 0 ? (
+        <p className="text-gray-500 text-center py-4">No notifications</p>
+      ) : (
+        notifications.map((notification, index) => (
+          <div key={index} className="p-3 bg-gray-50 rounded-lg mb-3">
+            <p className="text-sm font-medium">{notification.title}</p>
+            <p className="text-xs text-gray-600">{notification.message}</p>
+            <p className="text-xs text-gray-500">{notification.time}</p>
+          </div>
+        ))
+      );
+    }
+
+
+
+    if (activeModal === 'users') {
+      return (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="font-medium">John Kamau</p>
+              <p className="text-sm text-gray-600">Driver</p>
+            </div>
+            <span className="text-sm text-green-600">Active</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="font-medium">Mary Wanjiku</p>
+              <p className="text-sm text-gray-600">Driver</p>
+            </div>
+            <span className="text-sm text-green-600">Active</span>
+          </div>
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+            <div>
+              <p className="font-medium">Peter Mwangi</p>
+              <p className="text-sm text-gray-600">Driver</p>
+            </div>
+            <span className="text-sm text-yellow-600">Idle</span>
+          </div>
+
+        </div>
+      );
+    }
+
+    if (activeModal === 'reports') {
+      return (
+        <div className="space-y-3">
+          <div className="p-3 rounded-lg border-l-4 bg-red-50 border-red-500">
+            <p className="font-medium text-red-800">Bin Overflow Alert</p>
+            <p className="text-sm text-red-600">Bin #12 in Westlands is full</p>
+            <p className="text-xs text-gray-500">2 hours ago</p>
+          </div>
+          <div className="p-3 rounded-lg border-l-4 bg-yellow-50 border-yellow-500">
+            <p className="font-medium text-yellow-800">Route Delay</p>
+            <p className="text-sm text-yellow-600">Truck T002 is 30 mins behind schedule</p>
+            <p className="text-xs text-gray-500">1 hour ago</p>
+          </div>
+          <div className="p-3 rounded-lg border-l-4 bg-green-50 border-green-500">
+            <p className="font-medium text-green-800">Collection Complete</p>
+            <p className="text-sm text-green-600">CBD route completed successfully</p>
+            <p className="text-xs text-gray-500">3 hours ago</p>
+          </div>
+
+        </div>
+      );
+    }
+
+
+
     if (activeModal === 'collections') {
       const completedCount = stats.completed || 5;
       const completedCollections = [
@@ -234,10 +438,6 @@ const Dashboard = () => {
       ].slice(0, completedCount);
       return (
         <div className="space-y-3">
-          <div className="text-center mb-4">
-            <p className="text-2xl font-bold text-green-600">{stats.completed || 5}</p>
-            <p className="text-sm text-gray-600">Collections Completed Today</p>
-          </div>
           {completedCollections.map((collection, i) => (
             <div key={i} className="p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
               <div className="flex justify-between items-start">
@@ -265,10 +465,6 @@ const Dashboard = () => {
       ];
       return (
         <div className="space-y-4">
-          <div className="text-center mb-4">
-            <p className="text-2xl font-bold text-primary">245kg</p>
-            <p className="text-sm text-gray-600">Total Weight Collected Today</p>
-          </div>
           {weightData.map((item, i) => (
             <div key={i} className="space-y-2">
               <div className="flex justify-between">
@@ -298,10 +494,6 @@ const Dashboard = () => {
       ].slice(0, pendingCount);
       return (
         <div className="space-y-3">
-          <div className="text-center mb-4">
-            <p className="text-2xl font-bold text-orange-600">{stats.pendingCollections || stats.pending || 3}</p>
-            <p className="text-sm text-gray-600">Collections Remaining</p>
-          </div>
           {remainingCollections.map((collection, i) => (
             <div key={i} className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
               <div className="flex justify-between items-start mb-2">
@@ -324,7 +516,19 @@ const Dashboard = () => {
       );
     }
 
-    return <div>Content for {activeModal}</div>;
+
+
+
+
+
+
+
+
+
+
+
+    
+    return <div className="text-center py-4 text-gray-500">No content available</div>;
   };
 
   if (loading) {
@@ -357,8 +561,8 @@ const Dashboard = () => {
           <div>
             <h1 className="text-2xl font-bold">TakaTrack</h1>
             <p className="opacity-90">
-              {user?.role === 'driver' ? 'Driver Dashboard' :
-               user?.role === 'admin' ? 'Admin Dashboard' :
+              {user?.role === 'driver' || user?.email?.includes('driver') ? 'Driver Dashboard' :
+               user?.role === 'admin' || user?.email?.includes('admin') ? 'Admin Dashboard' :
                'Resident Dashboard'}
             </p>
           </div>
@@ -392,7 +596,7 @@ const Dashboard = () => {
 
       <div className="p-4 -mt-8">
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {user?.role === 'driver' ? (
+          {user?.role === 'driver' || user?.email?.includes('driver') ? (
             <>
               <button onClick={() => openModal('route')} className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
@@ -439,7 +643,7 @@ const Dashboard = () => {
                 </div>
               </button>
             </>
-          ) : user?.role === 'admin' ? (
+          ) : user?.role === 'admin' || user?.email?.includes('admin') ? (
             <>
               <button onClick={() => openModal('users')} className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
@@ -456,7 +660,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-600 text-sm">Active Drivers</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.activeDrivers}</p>
+                    <p className="text-2xl font-bold text-gray-900">3</p>
                   </div>
                   <div className="bg-green-100 p-2 rounded-lg">
                     <Truck className="h-6 w-6 text-green-600" />
@@ -492,7 +696,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-600 text-sm">My Collections</p>
-                    <p className="text-2xl font-bold text-gray-900">3</p>
+                    <p className="text-2xl font-bold text-gray-900">{getMyCollectionsData().length}</p>
                   </div>
                   <div className="bg-blue-100 p-2 rounded-lg">
                     <MapPin className="h-6 w-6 text-blue-600" />
@@ -514,7 +718,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-600 text-sm">My Recycling</p>
-                    <p className="text-2xl font-bold text-gray-900">{stats.recycledWeight}kg</p>
+                    <p className="text-2xl font-bold text-gray-900">{getMyRecyclingData().reduce((sum, r) => sum + r.weight, 0).toFixed(1)}kg</p>
                   </div>
                   <div className="bg-primary/10 p-2 rounded-lg">
                     <Recycle className="h-6 w-6 text-primary" />
@@ -525,7 +729,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-600 text-sm">Eco Points</p>
-                    <p className="text-2xl font-bold text-gray-900">127</p>
+                    <p className="text-2xl font-bold text-gray-900">{Math.round(getMyRecyclingData().reduce((sum, r) => sum + (r.environmental_impact * 10), 0))}</p>
                   </div>
                   <div className="bg-orange-100 p-2 rounded-lg">
                     <TrendingUp className="h-6 w-6 text-orange-600" />
@@ -538,8 +742,8 @@ const Dashboard = () => {
 
         <div className="bg-white rounded-xl shadow-sm p-4">
           <h3 className="text-lg font-semibold mb-4">
-            {user?.role === 'driver' ? 'Today\'s Tasks' :
-             user?.role === 'admin' ? 'System Alerts' :
+            {user?.role === 'driver' || user?.email?.includes('driver') ? 'Today\'s Tasks' :
+             user?.role === 'admin' || user?.email?.includes('admin') ? 'System Alerts' :
              'Recent Activity'}
           </h3>
           {notifications.slice(0, 5).map((notification, index) => (
